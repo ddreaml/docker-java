@@ -1,9 +1,17 @@
 package com.github.dockerjava.jaxrs;
 
+import static jersey.repackaged.com.google.common.base.Preconditions.checkNotNull;
+
 import java.io.InputStream;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import javax.ws.rs.client.WebTarget;
+import javax.ws.rs.core.Response;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParser;
@@ -12,13 +20,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.dockerjava.api.command.EventCallback;
 import com.github.dockerjava.api.command.EventsCmd;
 import com.github.dockerjava.api.model.Event;
-import com.google.common.base.Preconditions;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.ws.rs.client.WebTarget;
-import javax.ws.rs.core.Response;
 
 public class EventsCmdExec extends AbstrDockerCmdExec<EventsCmd, ExecutorService> implements EventsCmd.Exec {
     private static final Logger LOGGER = LoggerFactory.getLogger(EventsCmdExec.class);
@@ -54,8 +55,8 @@ public class EventsCmdExec extends AbstrDockerCmdExec<EventsCmd, ExecutorService
         }
 
         public static EventNotifier create(EventCallback eventCallback, WebTarget webTarget) {
-            Preconditions.checkNotNull(eventCallback, "An EventCallback must be provided");
-            Preconditions.checkNotNull(webTarget, "An WebTarget must be provided");
+            checkNotNull(eventCallback, "An EventCallback must be provided");
+            checkNotNull(webTarget, "An WebTarget must be provided");
             return new EventNotifier(eventCallback, webTarget);
         }
 
@@ -67,7 +68,7 @@ public class EventsCmdExec extends AbstrDockerCmdExec<EventsCmd, ExecutorService
                 response = webTarget.request().get(Response.class);
                 InputStream inputStream = response.readEntity(InputStream.class);
                 JsonParser jp = JSON_FACTORY.createParser(inputStream);
-                while (jp.nextToken() != JsonToken.END_OBJECT && !jp.isClosed()) {
+                while (jp.nextToken() != JsonToken.END_OBJECT && !jp.isClosed() && eventCallback.isReceiving()) {
                     eventCallback.onEvent(OBJECT_MAPPER.readValue(jp, Event.class));
                     numEvents++;
                 }

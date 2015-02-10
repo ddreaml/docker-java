@@ -3,7 +3,7 @@
 
 Java API client for [Docker](http://docs.docker.io/ "Docker")
 
-Supports a subset of the Docker Client API v1.15, Docker Server version 1.3.0
+Supports a subset of the Docker Client API v1.16, Docker Server version 1.4.1
 
 <b>The current implementation is based on Jersey 2.x and therefore classpath incompatible with older Jersey 1.x dependent libraries!</b>
 
@@ -13,7 +13,7 @@ Developer forum for [docker-java](https://groups.google.com/forum/?hl=de#!forum/
 
 ###### Prerequisites:
 
-* Java 1.6
+* Java 1.7
 * Maven 3.0.5
 * Docker daemon running
 
@@ -59,15 +59,17 @@ Run build without integration tests:
     <dependency>
           <groupId>com.github.docker-java</groupId>
           <artifactId>docker-java</artifactId>
-          <version>0.10.3</version>
+          <version>0.10.5</version>
     </dependency>
 
 ### Latest SNAPSHOT version
+You can find the latest SNAPSHOT version including javadoc and source files on [Sonatypes OSS repository](https://oss.sonatype.org/content/groups/public/com/github/docker-java/docker-java/).
+
 
     <dependency>
           <groupId>com.github.docker-java</groupId>
           <artifactId>docker-java</artifactId>
-          <version>0.10.4-SNAPSHOT</version>
+          <version>1.0.0-SNAPSHOT</version>
     </dependency>
 
 ## Documentation
@@ -79,7 +81,7 @@ For code examples, please look at the [Wiki](https://github.com/docker-java/dock
 There are a couple of configuration items, all of which have sensible defaults:
 
 * `url` The Docker URL, e.g. `https://localhost:2376`.
-* `version` The API version, e.g. `1.15`.
+* `version` The API version, e.g. `1.16`.
 * `username` Your registry username (required to push containers).
 * `password` Your registry password.
 * `email` Your registry email.
@@ -92,7 +94,7 @@ There are three ways to configure, in descending order of precedence:
 In your application, e.g.
 
     DockerClientConfig config = DockerClientConfig.createDefaultConfigBuilder()
-        .withVersion("1.15")
+        .withVersion("1.16")
         .withUri("https://my-docker-host.tld:2376")
         .withUsername("dockeruser")
         .withPassword("ilovedocker")
@@ -105,7 +107,7 @@ In your application, e.g.
 #### Properties
 
     docker.io.url=https://localhost:2376
-    docker.io.version=1.15
+    docker.io.version=1.16
     docker.io.username=dockeruser
     docker.io.password=ilovedocker
     docker.io.email=dockeruser@github.com
@@ -120,10 +122,10 @@ In your application, e.g.
 ##### System Environment
 
     export DOCKER_URL=http://localhost:2376
-    
-Note: we also auto-detect defaults. If you use `DOCKER_HOST` we use that value, and if `DOCKER_CERT_PATH` is set, we switch to SSL.
 
-##### File System  
+Note: we also auto-detect defaults. If you use `DOCKER_HOST` we use that value, and if `DOCKER_CERT_PATH` or `DOCKER_TLS_VERIFY=1` is set, we switch to SSL.
+
+##### File System
 
 In `$HOME/.docker.io.properties`
 

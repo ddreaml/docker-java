@@ -1,18 +1,29 @@
 package com.github.dockerjava.core;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap;
+import static jersey.repackaged.com.google.common.base.Preconditions.checkNotNull;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.Serializable;
 import java.net.URI;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-public class DockerClientConfig {
-    private static final String DOCKER_HOST_PROPERTY = "DOCKER_HOST";
+import com.github.dockerjava.api.DockerClientException;
+import com.github.dockerjava.api.model.AuthConfig;
+import com.github.dockerjava.core.NameParser.HostnameReposName;
+import com.github.dockerjava.core.NameParser.ReposTag;
+
+public class DockerClientConfig implements Serializable {
+
+	private static final long serialVersionUID = -4307357472441531489L;
+	
+	private static final String DOCKER_HOST_PROPERTY = "DOCKER_HOST";
     private static final String DOCKER_CERT_PATH_PROPERTY = "DOCKER_CERT_PATH";
+    private static final String DOCKER_VERIFY_TLS_PROPERTY = "DOCKER_TLS_VERIFY";
     private static final String DOCKER_IO_URL_PROPERTY = "docker.io.url";
     private static final String DOCKER_IO_VERSION_PROPERTY = "docker.io.version";
     private static final String DOCKER_IO_USERNAME_PROPERTY = "docker.io.username";
@@ -23,36 +34,55 @@ public class DockerClientConfig {
     // this is really confusing, as there are two ways to spell it
     private static final String DOCKER_IO_ENABLE_LOGGING_FILTER_PROPERTY = "docker.io.enableLoggingFilter";
     private static final String DOCKER_IO_DOCKER_CERT_PATH_PROPERTY = "docker.io.dockerCertPath";
+    private static final String DOCKER_IO_DOCKER_CFG_PATH_PROPERTY = "docker.io.dockerCfgPath";
+    // connection pooling properties
+    private static final String DOCKER_IO_MAX_PER_ROUTE_PROPERTY = "docker.io.perRouteConnections";
+    private static final String DOCKER_IO_MAX_TOTAL_PROPERTY = "docker.io.totalConnections";
     /**
      * A map from the environment name to the interval name.
      */
-    private static final Map<String, String> ENV_NAME_TO_IO_NAME = ImmutableMap.<String, String>builder()
-            .put("DOCKER_URL", DOCKER_IO_URL_PROPERTY)
-            .put("DOCKER_VERSION", DOCKER_IO_VERSION_PROPERTY)
-            .put("DOCKER_USERNAME", DOCKER_IO_USERNAME_PROPERTY)
-            .put("DOCKER_PASSWORD", DOCKER_IO_PASSWORD_PROPERTY)
-            .put("DOCKER_EMAIL", DOCKER_IO_EMAIL_PROPERTY)
-            .put("DOCKER_SERVER_ADDRESS", DOCKER_IO_SERVER_ADDRESS_PROPERTY)
-            .put("DOCKER_READ_TIMEOUT", DOCKER_IO_READ_TIMEOUT_PROPERTY)
-            .put("DOCKER_LOGGING_FILTER_ENABLED", DOCKER_IO_ENABLE_LOGGING_FILTER_PROPERTY)
-            .put(DOCKER_CERT_PATH_PROPERTY, DOCKER_IO_DOCKER_CERT_PATH_PROPERTY)
-            .build();
+    // Immutable ish
+    private static final Map<String, String> ENV_NAME_TO_IO_NAME;
+    static {
+        Map<String, String> m = new HashMap<String, String>();
+        m.put("DOCKER_URL", DOCKER_IO_URL_PROPERTY);
+        m.put("DOCKER_VERSION", DOCKER_IO_VERSION_PROPERTY);
+        m.put("DOCKER_USERNAME", DOCKER_IO_USERNAME_PROPERTY);
+        m.put("DOCKER_PASSWORD", DOCKER_IO_PASSWORD_PROPERTY);
+        m.put("DOCKER_EMAIL", DOCKER_IO_EMAIL_PROPERTY);
+        m.put("DOCKER_SERVER_ADDRESS", DOCKER_IO_SERVER_ADDRESS_PROPERTY);
+        m.put("DOCKER_READ_TIMEOUT", DOCKER_IO_READ_TIMEOUT_PROPERTY);
+        m.put("DOCKER_LOGGING_FILTER_ENABLED", DOCKER_IO_ENABLE_LOGGING_FILTER_PROPERTY);
+        m.put(DOCKER_CERT_PATH_PROPERTY, DOCKER_IO_DOCKER_CERT_PATH_PROPERTY);
+        m.put("DOCKER_CFG_PATH", DOCKER_IO_DOCKER_CFG_PATH_PROPERTY);
+        ENV_NAME_TO_IO_NAME = Collections.unmodifiableMap(m);
+    }
+
     private static final String DOCKER_IO_PROPERTIES_PROPERTY = "docker.io.properties";
-    private final URI uri;
-    private final String version, username, password, email, serverAddress, dockerCertPath;
+    private URI uri;
+    private final String version, username, password, email, serverAddress, dockerCfgPath;
     private final Integer readTimeout;
     private final boolean loggingFilterEnabled;
+    private final SSLConfig sslConfig;
+    
+    private final int maxTotalConnections;
+    private final int maxPerRouteConnections;
 
-    DockerClientConfig(URI uri, String version, String username, String password, String email, String serverAddress, String dockerCertPath, Integer readTimeout, boolean loggingFilterEnabled) {
+    DockerClientConfig(URI uri, String version, String username, String password, String email, String serverAddress,
+                       String dockerCfgPath, Integer readTimeout, boolean loggingFilterEnabled, SSLConfig sslConfig,
+                       int maxTotalConns, int maxPerRouteConns) {
         this.uri = uri;
         this.version = version;
         this.username = username;
         this.password = password;
         this.email = email;
         this.serverAddress = serverAddress;
-        this.dockerCertPath = dockerCertPath;
+        this.dockerCfgPath = dockerCfgPath;
         this.readTimeout = readTimeout;
         this.loggingFilterEnabled = loggingFilterEnabled;
+        this.sslConfig = sslConfig;
+        this.maxTotalConnections = maxTotalConns;
+        this.maxPerRouteConnections = maxPerRouteConns;
     }
 
     private static Properties loadIncludedDockerProperties(Properties systemProperties) {
@@ -130,7 +160,7 @@ public class DockerClientConfig {
 
     private static String protocol(Map<String, String> env) {
         // if this is set, we assume we need SSL
-        return env.containsKey(DOCKER_CERT_PATH_PROPERTY) ? "https" : "http";
+        return env.containsKey(DOCKER_CERT_PATH_PROPERTY) || "1".equals(env.get(DOCKER_VERIFY_TLS_PROPERTY)) ? "https" : "http";
     }
 
     /**
@@ -153,6 +183,7 @@ public class DockerClientConfig {
                 DOCKER_IO_READ_TIMEOUT_PROPERTY,
                 DOCKER_IO_ENABLE_LOGGING_FILTER_PROPERTY,
                 DOCKER_IO_DOCKER_CERT_PATH_PROPERTY,
+                DOCKER_IO_DOCKER_CFG_PATH_PROPERTY,
         }) {
             if (systemProperties.containsKey(key)) {
                 overriddenProperties.setProperty(key, systemProperties.getProperty(key));
@@ -179,6 +210,10 @@ public class DockerClientConfig {
     public URI getUri() {
         return uri;
     }
+
+    public void setUri(URI uri) {
+		this.uri = uri;
+	}
 
     public String getVersion() {
         return version;
@@ -208,11 +243,57 @@ public class DockerClientConfig {
         return loggingFilterEnabled;
     }
 
-    public String getDockerCertPath() {
-        return dockerCertPath;
+    public SSLConfig getSslConfig() {
+      return sslConfig;
     }
 
-    @Override
+    public String getDockerCfgPath() {
+        return dockerCfgPath;
+    }
+    
+    private AuthConfig getAuthConfig() {
+    	AuthConfig authConfig = null;
+    	if (getUsername() != null && getPassword() != null && getEmail() != null
+    			&& getServerAddress() != null) {
+    		authConfig = new AuthConfig();
+    		authConfig.setUsername(getUsername());
+    		authConfig.setPassword(getPassword());
+    		authConfig.setEmail(getEmail());
+    		authConfig.setServerAddress(getServerAddress());
+    	} 
+    	return authConfig;
+    }
+    
+    public AuthConfig effectiveAuthConfig(String imageName) {
+		AuthConfig authConfig = null;
+
+		String dockerCfgFile = getDockerCfgPath();
+
+		if (dockerCfgFile != null && imageName != null) {
+			AuthConfigFile authConfigFile;
+			try {
+				authConfigFile = AuthConfigFile.loadConfig(new File(
+						dockerCfgFile));
+			} catch (IOException e) {
+				throw new DockerClientException(
+						"Failed to parse dockerCfgFile", e);
+			}
+			ReposTag reposTag = NameParser.parseRepositoryTag(imageName);
+			HostnameReposName hostnameReposName = NameParser
+					.resolveRepositoryName(reposTag.repos);
+			
+			authConfig = authConfigFile
+					.resolveAuthConfig(hostnameReposName.hostname);	
+		}
+		
+		AuthConfig _authConfig = getAuthConfig();
+		
+		if(_authConfig != null) authConfig = _authConfig;
+		
+		return authConfig;
+	}
+
+  @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
@@ -220,7 +301,9 @@ public class DockerClientConfig {
         DockerClientConfig that = (DockerClientConfig) o;
 
         if (loggingFilterEnabled != that.loggingFilterEnabled) return false;
-        if (dockerCertPath != null ? !dockerCertPath.equals(that.dockerCertPath) : that.dockerCertPath != null)
+        if (sslConfig != null ? !sslConfig.equals(that.sslConfig) : that.sslConfig != null)
+            return false;
+        if (dockerCfgPath != null ? !dockerCfgPath.equals(that.dockerCfgPath) : that.dockerCfgPath != null)
             return false;
         if (email != null ? !email.equals(that.email) : that.email != null) return false;
         if (password != null ? !password.equals(that.password) : that.password != null) return false;
@@ -242,7 +325,8 @@ public class DockerClientConfig {
         result = 31 * result + (password != null ? password.hashCode() : 0);
         result = 31 * result + (email != null ? email.hashCode() : 0);
         result = 31 * result + (serverAddress != null ? serverAddress.hashCode() : 0);
-        result = 31 * result + (dockerCertPath != null ? dockerCertPath.hashCode() : 0);
+        result = 31 * result + (dockerCfgPath != null ? dockerCfgPath.hashCode() : 0);
+        result = 31 * result + (sslConfig != null ? sslConfig.hashCode() : 0);
         result = 31 * result + (readTimeout != null ? readTimeout.hashCode() : 0);
         result = 31 * result + (loggingFilterEnabled ? 1 : 0);
         return result;
@@ -257,7 +341,8 @@ public class DockerClientConfig {
                 ", password='" + password + '\'' +
                 ", email='" + email + '\'' +
                 ", serverAddress='" + serverAddress + '\'' +
-                ", dockerCertPath='" + dockerCertPath + '\'' +
+                ", dockerCfgPath='" + dockerCfgPath + '\'' +
+                ", sslConfig='" + sslConfig + '\'' +
                 ", readTimeout=" + readTimeout +
                 ", loggingFilterEnabled=" + loggingFilterEnabled +
                 '}';
@@ -265,15 +350,16 @@ public class DockerClientConfig {
 
     public static class DockerClientConfigBuilder {
         private URI uri;
-        private String version, username, password, email, serverAddress, dockerCertPath;
-        private Integer readTimeout;
+        private String version, username, password, email, serverAddress, dockerCfgPath;
+        private Integer readTimeout, maxTotalConnections, maxPerRouteConnections;
         private boolean loggingFilterEnabled;
+        private SSLConfig sslConfig;
 
         /**
          * This will set all fields in the builder to those contained in the Properties object. The Properties object
-         * should contain the following docker.io.* keys: url, version, username, password, email, and dockerCertPath. If
-         * docker.io.readTimeout or docker.io.enableLoggingFilter are not contained, they will be set to 1000 and true,
-         * respectively.
+         * should contain the following docker.io.* keys: url, version, username, password, email, dockerCertPath, and
+         * dockerCfgPath. If docker.io.readTimeout or docker.io.enableLoggingFilter are not contained, they will be set
+         *  to 1000 and true, respectively.
          */
         public DockerClientConfigBuilder withProperties(Properties p) {
             return withUri(p.getProperty(DOCKER_IO_URL_PROPERTY))
@@ -284,11 +370,15 @@ public class DockerClientConfig {
                     .withServerAddress(p.getProperty(DOCKER_IO_SERVER_ADDRESS_PROPERTY))
                     .withReadTimeout(Integer.valueOf(p.getProperty(DOCKER_IO_READ_TIMEOUT_PROPERTY, "0")))
                     .withLoggingFilter(Boolean.valueOf(p.getProperty(DOCKER_IO_ENABLE_LOGGING_FILTER_PROPERTY, "true")))
-                    .withDockerCertPath(p.getProperty(DOCKER_IO_DOCKER_CERT_PATH_PROPERTY));
+                    .withDockerCertPath(p.getProperty(DOCKER_IO_DOCKER_CERT_PATH_PROPERTY))
+                    .withDockerCfgPath(p.getProperty(DOCKER_IO_DOCKER_CFG_PATH_PROPERTY))
+                    .withMaxPerRouteConnections(Integer.valueOf(p.getProperty(DOCKER_IO_MAX_PER_ROUTE_PROPERTY, "2")))
+                    .withMaxTotalConnections(Integer.valueOf(p.getProperty(DOCKER_IO_MAX_TOTAL_PROPERTY, "20")))
+                    ;
         }
 
         public final DockerClientConfigBuilder withUri(String uri) {
-            Preconditions.checkNotNull(uri, "uri was not specified");
+            checkNotNull(uri, "uri was not specified");
             this.uri = URI.create(uri);
             return this;
         }
@@ -322,6 +412,16 @@ public class DockerClientConfig {
             this.readTimeout = readTimeout;
             return this;
         }
+        
+        public final DockerClientConfigBuilder withMaxTotalConnections(Integer maxTotalConnections) {
+            this.maxTotalConnections = maxTotalConnections;
+            return this;
+        }
+        
+        public final DockerClientConfigBuilder withMaxPerRouteConnections(Integer maxPerRouteConnections) {
+            this.maxPerRouteConnections = maxPerRouteConnections;
+            return this;
+        }
 
         public final DockerClientConfigBuilder withLoggingFilter(boolean loggingFilterEnabled) {
             this.loggingFilterEnabled = loggingFilterEnabled;
@@ -329,7 +429,18 @@ public class DockerClientConfig {
         }
 
         public final DockerClientConfigBuilder withDockerCertPath(String dockerCertPath) {
-            this.dockerCertPath = dockerCertPath;
+            this.sslConfig = new LocalDirectorySSLConfig(dockerCertPath);
+            return this;
+        }
+
+        public final DockerClientConfigBuilder withDockerCfgPath(String dockerCfgPath) {
+            this.dockerCfgPath = dockerCfgPath;
+            return this;
+        }
+
+
+        public final DockerClientConfigBuilder withSSLConfig(SSLConfig config) {
+            this.sslConfig = config;
             return this;
         }
 
@@ -341,10 +452,21 @@ public class DockerClientConfig {
                     password,
                     email,
                     serverAddress,
-                    dockerCertPath,
+                    dockerCfgPath,
                     readTimeout,
-                    loggingFilterEnabled
+                    loggingFilterEnabled,
+                    sslConfig,
+                    maxTotalConnections,
+                    maxPerRouteConnections
             );
         }
+    }
+
+    public int getMaxTotalConnections() {
+      return maxTotalConnections;
+    }
+
+    public int getMaxPerRoutConnections() {
+      return maxPerRouteConnections;
     }
 }

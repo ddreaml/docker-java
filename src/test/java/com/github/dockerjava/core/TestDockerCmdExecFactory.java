@@ -6,41 +6,9 @@ import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.github.dockerjava.api.command.AttachContainerCmd;
+import com.github.dockerjava.api.command.*;
 import com.github.dockerjava.api.command.AuthCmd.Exec;
-import com.github.dockerjava.api.command.BuildImageCmd;
-import com.github.dockerjava.api.command.CommitCmd;
-import com.github.dockerjava.api.command.ContainerDiffCmd;
-import com.github.dockerjava.api.command.CopyFileFromContainerCmd;
-import com.github.dockerjava.api.command.CreateContainerCmd;
-import com.github.dockerjava.api.command.CreateContainerResponse;
-import com.github.dockerjava.api.command.CreateImageCmd;
-import com.github.dockerjava.api.command.CreateImageResponse;
-import com.github.dockerjava.api.command.DockerCmdExecFactory;
-import com.github.dockerjava.api.command.EventsCmd;
-import com.github.dockerjava.api.command.InfoCmd;
-import com.github.dockerjava.api.command.InspectContainerCmd;
-import com.github.dockerjava.api.command.InspectImageCmd;
-import com.github.dockerjava.api.command.KillContainerCmd;
-import com.github.dockerjava.api.command.ListContainersCmd;
-import com.github.dockerjava.api.command.ListImagesCmd;
-import com.github.dockerjava.api.command.LogContainerCmd;
-import com.github.dockerjava.api.command.PauseContainerCmd;
-import com.github.dockerjava.api.command.PingCmd;
-import com.github.dockerjava.api.command.PullImageCmd;
-import com.github.dockerjava.api.command.PushImageCmd;
-import com.github.dockerjava.api.command.RemoveContainerCmd;
-import com.github.dockerjava.api.command.RemoveImageCmd;
-import com.github.dockerjava.api.command.RestartContainerCmd;
-import com.github.dockerjava.api.command.SearchImagesCmd;
-import com.github.dockerjava.api.command.StartContainerCmd;
-import com.github.dockerjava.api.command.StopContainerCmd;
-import com.github.dockerjava.api.command.TagImageCmd;
-import com.github.dockerjava.api.command.TopContainerCmd;
-import com.github.dockerjava.api.command.UnpauseContainerCmd;
-import com.github.dockerjava.api.command.VersionCmd;
-import com.github.dockerjava.api.command.WaitContainerCmd;
-import com.github.dockerjava.core.DockerClientConfig;
+import com.github.dockerjava.jaxrs.BuildImageCmdExec;
 
 /**
  * Special {@link DockerCmdExecFactory} implementation that collects container and image creations
@@ -125,18 +93,18 @@ public class TestDockerCmdExecFactory implements DockerCmdExecFactory {
 	public BuildImageCmd.Exec createBuildImageCmdExec() {
 		return new BuildImageCmd.Exec() {
 			@Override
-			public InputStream exec(BuildImageCmd command) {
+			public  BuildImageCmd.Response exec(BuildImageCmd command) {
 				// can't detect image id here so tagging it
 				String tag = command.getTag();
 				if(tag == null || "".equals(tag.trim())) {
 					tag = "" + new SecureRandom().nextInt(Integer.MAX_VALUE);
 					command.withTag(tag);
 				}
-				InputStream inputStream = delegate.createBuildImageCmdExec().exec(command); 
+				InputStream inputStream = delegate.createBuildImageCmdExec().exec(command);
 				imageNames.add(tag);
-				return inputStream;
+				return new BuildImageCmdExec.ResponseImpl(inputStream);
 			}
-		};
+                };
 	}
 	
 	@Override
@@ -154,7 +122,12 @@ public class TestDockerCmdExecFactory implements DockerCmdExecFactory {
 		return delegate.createPingCmdExec();
 	}
 
-	@Override
+    @Override
+    public ExecCreateCmd.Exec createExecCmdExec() {
+        return delegate.createExecCmdExec();
+    }
+
+    @Override
 	public VersionCmd.Exec createVersionCmdExec() {
 		return delegate.createVersionCmdExec();
 	}
@@ -168,6 +141,9 @@ public class TestDockerCmdExecFactory implements DockerCmdExecFactory {
 	public PushImageCmd.Exec createPushImageCmdExec() {
 		return delegate.createPushImageCmdExec();
 	}
+    
+    @Override
+    public SaveImageCmd.Exec createSaveImageCmdExec() { return delegate.createSaveImageCmdExec(); }
 
 	@Override
 	public SearchImagesCmd.Exec createSearchImagesCmdExec() {
@@ -209,7 +185,12 @@ public class TestDockerCmdExecFactory implements DockerCmdExecFactory {
 		return delegate.createAttachContainerCmdExec();
 	}
 
-	@Override
+    @Override
+    public ExecStartCmd.Exec createExecStartCmdExec() {
+        return delegate.createExecStartCmdExec();
+    }
+
+    @Override
 	public LogContainerCmd.Exec createLogContainerCmdExec() {
 		return delegate.createLogContainerCmdExec();
 	}

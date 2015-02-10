@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
@@ -61,11 +60,11 @@ public class Links
 			final List<Link> binds = new ArrayList<Link>();
 			final ObjectCodec oc = jsonParser.getCodec();
 			final JsonNode node = oc.readTree(jsonParser);
-			for (final Iterator<Map.Entry<String, JsonNode>> it = node.fields(); it.hasNext();) {
+			for (final Iterator<JsonNode> it = node.elements(); it.hasNext();) {
 
-				final Map.Entry<String, JsonNode> field = it.next();
-				if (!field.getValue().equals(NullNode.getInstance())) {
-					binds.add(Link.parse(field.getKey()));
+				final JsonNode element = it.next();
+				if (!element.equals(NullNode.getInstance())) {
+					binds.add(Link.parse(element.asText()));
 				}
 			}
 			return new Links(binds.toArray(new Link[0]));

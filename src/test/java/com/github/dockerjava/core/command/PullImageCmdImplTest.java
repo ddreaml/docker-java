@@ -49,7 +49,7 @@ public class PullImageCmdImplTest extends AbstractDockerClientTest {
 
     @Test
     public void nullAuthConfig() throws Exception {
-        PullImageCmdImpl pullImageCmd = new PullImageCmdImpl(NOP_EXEC, "");
+        PullImageCmdImpl pullImageCmd = new PullImageCmdImpl(NOP_EXEC, null, "");
         try {
             pullImageCmd.withAuthConfig(null);
             fail();
@@ -76,7 +76,7 @@ public class PullImageCmdImplTest extends AbstractDockerClientTest {
 		LOG.info("Removing image: {}", testImage);
 		
 		try {
-			dockerClient.removeImageCmd(testImage).exec();
+			dockerClient.removeImageCmd(testImage).withForce().exec();
 		} catch (NotFoundException e) {
 			// just ignore if not exist
 		}
@@ -109,12 +109,14 @@ public class PullImageCmdImplTest extends AbstractDockerClientTest {
 	public void testPullNonExistingImage() throws DockerException, IOException {
 		
 		// does not throw an exception
-		dockerClient.pullImageCmd("nonexisting/foo").exec();
+		InputStream is = dockerClient.pullImageCmd("nonexisting/foo").exec();
+		// stream needs to be fully read in order to close the underlying connection
+		this.asString(is);
 		
 		try {
 			dockerClient.pullImageCmd("non-existing/foo").exec();
 			fail("expected InternalServerErrorException");
-		} catch (InternalServerErrorException e) {
+		} catch (InternalServerErrorException ignored) {
 		}
 		
 	}

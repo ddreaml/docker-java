@@ -1,7 +1,6 @@
 package com.github.dockerjava.jaxrs;
 
 import javax.ws.rs.client.WebTarget;
-import javax.ws.rs.core.Response;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +22,7 @@ public class RemoveImageCmdExec extends AbstrDockerCmdExec<RemoveImageCmd, Void>
 				.queryParam("noprune", command.hasNoPruneEnabled() ? "1" : "0");
 
 		LOGGER.trace("DELETE: {}", webResource);
-		webResource.request().delete(Response.class);
+		webResource.request().delete().close();
 		
 		return null;
 	}

@@ -1,7 +1,8 @@
-package com.github.dockerjava.jaxrs.util;
+package com.github.dockerjava.core.util;
 
 import java.io.EOFException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.Charset;
 
 import javax.ws.rs.client.ClientRequestContext;
@@ -36,6 +37,7 @@ public class ResponseStatusExceptionFilter implements ClientResponseFilter {
 		case 200:
 		case 201:	
 		case 204:
+		case 301:	
 			return;
 		case 304:
 			throw new NotModifiedException(getBodyAsMessage(responseContext));
@@ -56,14 +58,16 @@ public class ResponseStatusExceptionFilter implements ClientResponseFilter {
 		}
     }
 
-	public String getBodyAsMessage(ClientResponseContext responseContext)
+	private String getBodyAsMessage(ClientResponseContext responseContext)
 			throws IOException {
 	    if (responseContext.hasEntity()) {
 	        int contentLength = responseContext.getLength();
 	        if (contentLength != -1) {
 	            byte[] buffer = new byte[contentLength];
 	            try {
-	                IOUtils.readFully(responseContext.getEntityStream(), buffer);
+	                InputStream entityStream = responseContext.getEntityStream();
+                  IOUtils.readFully(entityStream, buffer);
+                  entityStream.close();
 	            }
 	            catch (EOFException e) {
 	                return null;

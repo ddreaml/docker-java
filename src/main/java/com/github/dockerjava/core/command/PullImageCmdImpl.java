@@ -1,23 +1,23 @@
 package com.github.dockerjava.core.command;
 
-import com.github.dockerjava.api.command.PullImageCmd;
-import com.github.dockerjava.api.model.AuthConfig;
-import com.google.common.base.Preconditions;
+import static jersey.repackaged.com.google.common.base.Preconditions.checkNotNull;
 
 import java.io.InputStream;
+
+import com.github.dockerjava.api.command.PullImageCmd;
+import com.github.dockerjava.api.model.AuthConfig;
 
 /**
  *
  * Pull image from repository.
  *
  */
-public class PullImageCmdImpl extends AbstrDockerCmd<PullImageCmd, InputStream> implements PullImageCmd {
+public class PullImageCmdImpl extends AbstrAuthCfgDockerCmd<PullImageCmd, InputStream> implements PullImageCmd {
 
     private String repository, tag, registry;
-    private AuthConfig authConfig;
 
-	public PullImageCmdImpl(PullImageCmd.Exec exec, String repository) {
-		super(exec);
+	public PullImageCmdImpl(PullImageCmd.Exec exec, AuthConfig authConfig, String repository) {
+		super(exec, authConfig);
 		withRepository(repository);
 	}
 
@@ -36,37 +36,26 @@ public class PullImageCmdImpl extends AbstrDockerCmd<PullImageCmd, InputStream> 
         return registry;
     }
 
-    public AuthConfig getAuthConfig() {
-        return authConfig;
-    }
-
     @Override
 	public PullImageCmd withRepository(String repository) {
-		Preconditions.checkNotNull(repository, "repository was not specified");
+		checkNotNull(repository, "repository was not specified");
 		this.repository = repository;
 		return this;
 	}
 
 	@Override
 	public PullImageCmd withTag(String tag) {
-		Preconditions.checkNotNull(tag, "tag was not specified");
+		checkNotNull(tag, "tag was not specified");
 		this.tag = tag;
 		return this;
 	}
 
 	@Override
 	public PullImageCmd withRegistry(String registry) {
-		Preconditions.checkNotNull(registry, "registry was not specified");
+		checkNotNull(registry, "registry was not specified");
 		this.registry = registry;
 		return this;
 	}
-
-    @Override
-    public PullImageCmd withAuthConfig(AuthConfig authConfig) {
-		Preconditions.checkNotNull(authConfig, "authConfig was not specified");
-        this.authConfig = authConfig;
-        return this;
-    }
 
     @Override
     public String toString() {

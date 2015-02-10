@@ -16,12 +16,12 @@ public class DockerClientConfigTest {
     public static final DockerClientConfig EXAMPLE_CONFIG = newExampleConfig();
 
     private static DockerClientConfig newExampleConfig() {
-        return new DockerClientConfig(URI.create("http://foo"), "bar", "baz", "qux", "blam", "wham", "flim", 877, false);
+        return new DockerClientConfig(URI.create("http://foo"), "bar", "baz", "qux", "blam", "wham", "flam", 877, false, new LocalDirectorySSLConfig("flim"), 20, 2);
     }
 
     @Test
     public void string() throws Exception {
-        assertEquals("DockerClientConfig{uri=http://foo, version='bar', username='baz', password='qux', email='blam', serverAddress='wham', dockerCertPath='flim', readTimeout=877, loggingFilterEnabled=false}",
+        assertEquals("DockerClientConfig{uri=http://foo, version='bar', username='baz', password='qux', email='blam', serverAddress='wham', dockerCfgPath='flam', sslConfig='LocalDirectorySSLConfig{dockerCertPath=flim}', readTimeout=877, loggingFilterEnabled=false}",
                 EXAMPLE_CONFIG.toString());
     }
 
@@ -36,6 +36,8 @@ public class DockerClientConfigTest {
         // given docker host in env
         Map<String, String> env = new HashMap<String, String>();
         env.put("DOCKER_HOST", "tcp://baz:8768");
+        // and it looks to be SSL disabled
+        env.remove("DOCKER_CERT_PATH");
 
         // when you build a config
         DockerClientConfig config = buildConfig(env, new Properties());
@@ -45,13 +47,65 @@ public class DockerClientConfigTest {
     }
 
     @Test
-    public void environmentDockerHostHttpsAutoDetect() throws Exception {
+    public void environmentDockerHostHttpsAutoDetectByCertPath() throws Exception {
 
         // given docker host in env
         Map<String, String> env = new HashMap<String, String>(System.getenv());
         env.put("DOCKER_HOST", "tcp://bar:8768");
         // and it looks to be SSL enabled
         env.put("DOCKER_CERT_PATH", "any value");
+
+        // when you build a config
+        DockerClientConfig config = buildConfig(env, new Properties());
+
+        // then the URL is that value with "tcp" changed to "https"
+        assertEquals(config.getUri(), URI.create("https://bar:8768"));
+    }
+
+    @Test
+    public void environmentDockerHostHttpsAutoDetectByTlsVerify() throws Exception {
+
+        // given docker host in env
+        Map<String, String> env = new HashMap<String, String>(System.getenv());
+        env.put("DOCKER_HOST", "tcp://bar:8768");
+        // and it looks to be SSL enabled
+        env.put("DOCKER_TLS_VERIFY", "1");
+
+        // when you build a config
+        DockerClientConfig config = buildConfig(env, new Properties());
+
+        // then the URL is that value with "tcp" changed to "https"
+        assertEquals(config.getUri(), URI.create("https://bar:8768"));
+    }
+
+    @Test
+    public void environmentDockerHostWithInvalidTlsVerify() throws Exception {
+
+        // given docker host in env
+        Map<String, String> env = new HashMap<String, String>(System.getenv());
+        env.put("DOCKER_HOST", "tcp://bar:8768");
+        // and it looks to be SSL disabled
+        env.remove("DOCKER_CERT_PATH");
+        // and it has an invalid TLS_VERIFY value
+        env.put("DOCKER_TLS_VERIFY", "any value different from '1'");
+
+        // when you build a config
+        DockerClientConfig config = buildConfig(env, new Properties());
+
+        // then the URL is that value with "tcp" changed to "https"
+        assertEquals(config.getUri(), URI.create("http://bar:8768"));
+    }
+
+    @Test
+    public void environmentDockerHostWithInvalidTlsVerifyButWithCertPath() throws Exception {
+
+        // given docker host in env
+        Map<String, String> env = new HashMap<String, String>(System.getenv());
+        env.put("DOCKER_HOST", "tcp://bar:8768");
+        // and it looks to be SSL enabled
+        env.put("DOCKER_CERT_PATH", "any value");
+        // and it has an invalid TLS_VERIFY value
+        env.put("DOCKER_TLS_VERIFY", "any value different from '1'");
 
         // when you build a config
         DockerClientConfig config = buildConfig(env, new Properties());
@@ -72,6 +126,7 @@ public class DockerClientConfigTest {
         env.put("DOCKER_EMAIL", "blam");
         env.put("DOCKER_SERVER_ADDRESS", "wham");
         env.put("DOCKER_CERT_PATH", "flim");
+        env.put("DOCKER_CFG_PATH", "flam");
         env.put("DOCKER_READ_TIMEOUT", "877");
         env.put("DOCKER_LOGGING_FILTER_ENABLED", "false");
 
@@ -103,7 +158,8 @@ public class DockerClientConfigTest {
         assertEquals(config.getServerAddress(), AuthConfig.DEFAULT_SERVER_ADDRESS);
         assertEquals(config.getVersion(), null);
         assertEquals(config.isLoggingFilterEnabled(), true);
-        assertEquals(config.getDockerCertPath(), "someHomeDir/.docker");
+        assertEquals(config.getDockerCfgPath(), "someHomeDir/.dockercfg");
+        assertEquals( ((LocalDirectorySSLConfig)config.getSslConfig()).getDockerCertPath(), "someHomeDir/.docker");
     }
 
     @Test
@@ -118,6 +174,7 @@ public class DockerClientConfigTest {
         systemProperties.setProperty("docker.io.email", "blam");
         systemProperties.setProperty("docker.io.serverAddress", "wham");
         systemProperties.setProperty("docker.io.dockerCertPath", "flim");
+        systemProperties.setProperty("docker.io.dockerCfgPath", "flam");
         systemProperties.setProperty("docker.io.readTimeout", "877");
         systemProperties.setProperty("docker.io.enableLoggingFilter", "false");
 

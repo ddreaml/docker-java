@@ -1,40 +1,49 @@
 package com.github.dockerjava.jaxrs;
 
-import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
-import com.github.dockerjava.api.DockerClientException;
+import static jersey.repackaged.com.google.common.base.Preconditions.checkNotNull;
+
+import java.io.IOException;
+import java.net.URI;
+
 import com.github.dockerjava.api.command.*;
-import com.github.dockerjava.core.CertificateUtils;
-import com.github.dockerjava.core.DockerClientConfig;
-import com.github.dockerjava.jaxrs.util.JsonClientFilter;
-import com.github.dockerjava.jaxrs.util.ResponseStatusExceptionFilter;
-import com.github.dockerjava.jaxrs.util.SelectiveLoggingFilter;
-import com.google.common.base.Preconditions;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.glassfish.jersey.CommonProperties;
-import org.glassfish.jersey.SslConfigurator;
-import org.glassfish.jersey.client.ClientConfig;
-import org.glassfish.jersey.client.ClientProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.SSLContext;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.WebTarget;
-import java.io.IOException;
-import java.security.KeyStore;
-import java.security.Security;
-import java.util.logging.Logger;
+
+import org.apache.http.config.RegistryBuilder;
+import org.apache.http.conn.socket.ConnectionSocketFactory;
+import org.apache.http.conn.socket.PlainConnectionSocketFactory;
+import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+import org.glassfish.jersey.CommonProperties;
+import org.glassfish.jersey.apache.connector.ApacheClientProperties;
+import org.glassfish.jersey.apache.connector.ApacheConnectorProvider;
+import org.glassfish.jersey.client.ClientConfig;
+import org.glassfish.jersey.client.ClientProperties;
+
+import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
+import com.github.dockerjava.api.DockerClientException;
+import com.github.dockerjava.core.DockerClientConfig;
+import com.github.dockerjava.core.util.JsonClientFilter;
+import com.github.dockerjava.core.util.ResponseStatusExceptionFilter;
+import com.github.dockerjava.core.util.SelectiveLoggingFilter;
 
 public class DockerCmdExecFactoryImpl implements DockerCmdExecFactory {
 
-    private static final Logger LOGGER = Logger.getLogger(DockerCmdExecFactoryImpl.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(DockerCmdExecFactoryImpl.class.getName());
     private Client client;
     private WebTarget baseResource;
 
     @Override
     public void init(DockerClientConfig dockerClientConfig) {
-        Preconditions.checkNotNull(dockerClientConfig, "config was not specified");
+        checkNotNull(dockerClientConfig, "config was not specified");
 
         ClientConfig clientConfig = new ClientConfig();
+        clientConfig.connectorProvider(new ApacheConnectorProvider());
         clientConfig.property(CommonProperties.FEATURE_AUTO_DISCOVERY_DISABLE, true);
 
         clientConfig.register(ResponseStatusExceptionFilter.class);
@@ -50,47 +59,31 @@ public class DockerCmdExecFactoryImpl implements DockerCmdExecFactory {
             clientConfig.property(ClientProperties.READ_TIMEOUT, readTimeout);
         }
 
+        URI originalUri = dockerClientConfig.getUri();
+
+        SSLContext sslContext;
+        try {
+            sslContext = dockerClientConfig.getSslConfig().getSSLContext();
+        } catch(Exception ex) {
+            throw new DockerClientException("Error in SSL Configuration", ex);
+        }
+
+        PoolingHttpClientConnectionManager connManager = new PoolingHttpClientConnectionManager(getSchemeRegistry(originalUri, sslContext));
+        connManager.setMaxTotal(dockerClientConfig.getMaxTotalConnections());
+        connManager.setDefaultMaxPerRoute(dockerClientConfig.getMaxPerRoutConnections());
+        clientConfig.property(ApacheClientProperties.CONNECTION_MANAGER, connManager);
+
         ClientBuilder clientBuilder = ClientBuilder.newBuilder().withConfig(clientConfig);
 
-        String dockerCertPath = dockerClientConfig.getDockerCertPath();
-
-        if (dockerCertPath != null) {
-            boolean certificatesExist = CertificateUtils.verifyCertificatesExist(dockerCertPath);
-
-            if (certificatesExist) {
-
-                try {
-
-                    Security.addProvider(new BouncyCastleProvider());
-
-                    KeyStore keyStore = CertificateUtils.createKeyStore(dockerCertPath);
-                    KeyStore trustStore = CertificateUtils.createTrustStore(dockerCertPath);
-
-                    // properties acrobatics not needed for java > 1.6
-                    String httpProtocols = System.getProperty("https.protocols");
-                    System.setProperty("https.protocols", "TLSv1");
-                    SslConfigurator sslConfig = SslConfigurator.newInstance(true);
-                    if (httpProtocols != null) System.setProperty("https.protocols", httpProtocols);
-
-                    sslConfig.keyStore(keyStore);
-                    sslConfig.keyStorePassword("docker");
-                    sslConfig.trustStore(trustStore);
-
-                    SSLContext sslContext = sslConfig.createSSLContext();
-
-
-                    clientBuilder.sslContext(sslContext);
-
-                } catch (Exception e) {
-                    throw new DockerClientException(e.getMessage(), e);
-                }
-
-            }
-
+        if (sslContext != null) {
+            clientBuilder.sslContext(sslContext);
         }
 
         client = clientBuilder.build();
 
+        if (originalUri.getScheme().equals("unix")) {
+            dockerClientConfig.setUri(UnixConnectionSocketFactory.sanitizeUri(originalUri));
+        }
         WebTarget webResource = client.target(dockerClientConfig.getUri());
 
         if (dockerClientConfig.getVersion() == null || dockerClientConfig.getVersion().isEmpty()) {
@@ -98,11 +91,20 @@ public class DockerCmdExecFactoryImpl implements DockerCmdExecFactory {
         } else {
             baseResource = webResource.path("v" + dockerClientConfig.getVersion());
         }
-
     }
 
+    private org.apache.http.config.Registry<ConnectionSocketFactory> getSchemeRegistry(final URI originalUri, SSLContext sslContext) {
+      RegistryBuilder<ConnectionSocketFactory> registryBuilder = RegistryBuilder.create();
+      registryBuilder.register("http", PlainConnectionSocketFactory.getSocketFactory());
+      if (sslContext != null) {
+        registryBuilder.register("https", new SSLConnectionSocketFactory(sslContext));
+      }
+      registryBuilder.register("unix", new UnixConnectionSocketFactory(originalUri));
+      return registryBuilder.build();
+      }
+
     protected WebTarget getBaseResource() {
-        Preconditions.checkNotNull(baseResource, "Factory not initialized. You probably forgot to call init()!");
+        checkNotNull(baseResource, "Factory not initialized. You probably forgot to call init()!");
         return baseResource;
     }
 
@@ -135,6 +137,9 @@ public class DockerCmdExecFactoryImpl implements DockerCmdExecFactory {
     public PushImageCmd.Exec createPushImageCmdExec() {
         return new PushImageCmdExec(getBaseResource());
     }
+    
+    @Override
+    public SaveImageCmd.Exec createSaveImageCmdExec() { return new SaveImageCmdExec(getBaseResource()); }
 
     @Override
     public CreateImageCmd.Exec createCreateImageCmdExec() {
@@ -182,6 +187,11 @@ public class DockerCmdExecFactoryImpl implements DockerCmdExecFactory {
     }
 
     @Override
+    public ExecCreateCmd.Exec createExecCmdExec() {
+        return new ExecCreateCmdExec(getBaseResource());
+    }
+
+    @Override
     public RemoveContainerCmd.Exec createRemoveContainerCmdExec() {
         return new RemoveContainerCmdExec(getBaseResource());
     }
@@ -194,6 +204,11 @@ public class DockerCmdExecFactoryImpl implements DockerCmdExecFactory {
     @Override
     public AttachContainerCmd.Exec createAttachContainerCmdExec() {
         return new AttachContainerCmdExec(getBaseResource());
+    }
+
+    @Override
+    public ExecStartCmd.Exec createExecStartCmdExec() {
+        return new ExecStartCmdExec(getBaseResource());
     }
 
     @Override
@@ -263,7 +278,7 @@ public class DockerCmdExecFactoryImpl implements DockerCmdExecFactory {
 
     @Override
     public void close() throws IOException {
-        Preconditions.checkNotNull(client, "Factory not initialized. You probably forgot to call init()!");
+        checkNotNull(client, "Factory not initialized. You probably forgot to call init()!");
         client.close();
     }
 

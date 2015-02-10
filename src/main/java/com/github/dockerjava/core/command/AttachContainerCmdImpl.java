@@ -1,11 +1,11 @@
 package com.github.dockerjava.core.command;
 
+import static jersey.repackaged.com.google.common.base.Preconditions.checkNotNull;
+
 import java.io.InputStream;
 
 import com.github.dockerjava.api.NotFoundException;
 import com.github.dockerjava.api.command.AttachContainerCmd;
-
-import com.google.common.base.Preconditions;
 
 /**
  * Attach to container
@@ -66,7 +66,7 @@ public class AttachContainerCmdImpl extends	AbstrDockerCmd<AttachContainerCmd, I
 
 	@Override
 	public AttachContainerCmd withContainerId(String containerId) {
-		Preconditions.checkNotNull(containerId, "containerId was not specified");
+		checkNotNull(containerId, "containerId was not specified");
 		this.containerId = containerId;
 		return this;
 	}
@@ -114,6 +114,11 @@ public class AttachContainerCmdImpl extends	AbstrDockerCmd<AttachContainerCmd, I
 	public AttachContainerCmd withLogs(boolean logs) {
 		this.logs = logs;
 		return this;
+	}
+	
+	@Override
+	public AttachContainerCmd withLogs() {
+		return withLogs(true);
 	}
 	
 	/**

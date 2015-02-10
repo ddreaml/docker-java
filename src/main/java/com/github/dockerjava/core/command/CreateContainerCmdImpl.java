@@ -1,20 +1,22 @@
 package com.github.dockerjava.core.command;
 
+import static jersey.repackaged.com.google.common.base.Preconditions.checkNotNull;
+
 import org.apache.commons.lang.builder.ToStringBuilder;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
-
 import com.github.dockerjava.api.ConflictException;
 import com.github.dockerjava.api.NotFoundException;
 import com.github.dockerjava.api.command.CreateContainerCmd;
 import com.github.dockerjava.api.command.CreateContainerResponse;
+import com.github.dockerjava.api.model.Capability;
 import com.github.dockerjava.api.model.ExposedPort;
 import com.github.dockerjava.api.model.ExposedPorts;
+import com.github.dockerjava.api.model.HostConfig;
 import com.github.dockerjava.api.model.Volume;
+import com.github.dockerjava.api.model.VolumesFrom;
 import com.github.dockerjava.api.model.Volumes;
-
-import com.google.common.base.Preconditions;
 
 /**
  *
@@ -39,23 +41,23 @@ public class CreateContainerCmdImpl extends AbstrDockerCmd<CreateContainerCmd, C
     @JsonProperty("StdinOnce")    private boolean   stdInOnce = false;
     @JsonProperty("Env")          private String[]  env;
     @JsonProperty("Cmd")          private String[]  cmd;
-    @JsonProperty("Dns")          private String[]  dns;
+    @JsonProperty("Entrypoint")   private String[]  entrypoint;
     @JsonProperty("Image")        private String    image;
     @JsonProperty("Volumes")      private Volumes volumes = new Volumes();
-    @JsonProperty("VolumesFrom")  private String[]    volumesFrom = new String[]{};
     @JsonProperty("WorkingDir")   private String workingDir = "";
     @JsonProperty("DisableNetwork") private boolean disableNetwork = false;
     @JsonProperty("ExposedPorts")   private ExposedPorts exposedPorts = new ExposedPorts();
+    @JsonProperty("HostConfig")   private HostConfig hostConfig = new HostConfig();
 	
 	public CreateContainerCmdImpl(CreateContainerCmd.Exec exec, String image) {
 		super(exec);
-		Preconditions.checkNotNull(image, "image was not specified");
+		checkNotNull(image, "image was not specified");
 		withImage(image);
 	}
 
 	@Override
 	public CreateContainerCmdImpl withName(String name) {
-		Preconditions.checkNotNull(name, "name was not specified");
+		checkNotNull(name, "name was not specified");
         this.name = name;
         return this;
     }
@@ -254,15 +256,26 @@ public class CreateContainerCmdImpl extends AbstrDockerCmd<CreateContainerCmd, C
         this.cmd = cmd;
         return this;
     }
-
+    
     @Override
-	public String[] getDns() {
-        return dns;
+    public String[] getEntrypoint() {
+    	return entrypoint;
+    }
+    
+    @Override
+	public CreateContainerCmdImpl withEntrypoint(String... entrypoint) {
+        this.entrypoint = entrypoint;
+        return this;
     }
 
     @Override
-	public CreateContainerCmdImpl withDns(String... dns) {
-        this.dns = dns;
+    public String[] getDns() {
+        return hostConfig.getDns();
+    }
+
+    @Override
+    public CreateContainerCmdImpl withDns(String... dns) {
+        hostConfig.setDns(dns);
         return this;
     }
 
@@ -290,13 +303,47 @@ public class CreateContainerCmdImpl extends AbstrDockerCmd<CreateContainerCmd, C
     }
 
     @Override
-	public String[] getVolumesFrom() {
-        return volumesFrom;
+	public VolumesFrom[] getVolumesFrom() {
+        return hostConfig.getVolumesFrom();
     }
 
     @Override
-	public CreateContainerCmdImpl withVolumesFrom(String... volumesFrom) {
-        this.volumesFrom = volumesFrom;
+	public CreateContainerCmdImpl withVolumesFrom(VolumesFrom... volumesFrom) {
+        this.hostConfig.setVolumesFrom(volumesFrom);
+        return this;
+    }
+
+    @Override
+    public HostConfig getHostConfig() {
+    	return hostConfig;
+    }
+    
+    @Override
+    public CreateContainerCmd withHostConfig(HostConfig hostConfig) {
+    	checkNotNull(hostConfig, "no host config was specified");
+    	this.hostConfig = hostConfig;
+    	return this;
+    }
+    
+    @Override
+    public Capability[] getCapAdd() {
+        return hostConfig.getCapAdd();
+    }
+
+    @Override
+    public CreateContainerCmd withCapAdd(Capability... capAdd) {
+        hostConfig.setCapAdd(capAdd);
+        return this;
+    }
+
+    @Override
+    public Capability[] getCapDrop() {
+        return hostConfig.getCapDrop();
+    }
+
+    @Override
+    public CreateContainerCmd withCapDrop(Capability... capDrop) {
+        hostConfig.setCapDrop(capDrop);
         return this;
     }
 
@@ -316,4 +363,5 @@ public class CreateContainerCmdImpl extends AbstrDockerCmd<CreateContainerCmd, C
     public CreateContainerResponse exec() throws NotFoundException, ConflictException {
     	return super.exec();
     }
+
 }    

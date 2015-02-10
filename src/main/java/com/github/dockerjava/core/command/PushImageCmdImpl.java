@@ -1,29 +1,33 @@
 package com.github.dockerjava.core.command;
 
-import java.io.InputStream;
+import static jersey.repackaged.com.google.common.base.Preconditions.checkNotNull;
 
 import com.github.dockerjava.api.NotFoundException;
 import com.github.dockerjava.api.command.PushImageCmd;
-
-import com.google.common.base.Preconditions;
 
 /**
  * Push the latest image to the repository.
  *
  * @param name The name, e.g. "alexec/busybox" or just "busybox" if you want to default. Not null.
  */
-public class PushImageCmdImpl extends AbstrAuthCfgDockerCmd<PushImageCmd, InputStream> implements PushImageCmd  {
+public class PushImageCmdImpl extends AbstrAuthCfgDockerCmd<PushImageCmd, PushImageCmd.Response> implements PushImageCmd  {
 
-	private String name;
+    private String name;
+    private String tag;
 
-	public PushImageCmdImpl(PushImageCmd.Exec exec, String name) {
-		super(exec);
-		withName(name);
-	}
+    public PushImageCmdImpl(PushImageCmd.Exec exec, String name) {
+    	super(exec);
+    	withName(name);
+    }
 
     @Override
 	public String getName() {
         return name;
+    }
+
+    @Override
+    public String getTag() {
+        return tag;
     }
 
     /**
@@ -31,10 +35,20 @@ public class PushImageCmdImpl extends AbstrAuthCfgDockerCmd<PushImageCmd, InputS
 	 */
 	@Override
 	public PushImageCmd withName(String name) {
-		Preconditions.checkNotNull(name, "name was not specified");
+		checkNotNull(name, "name was not specified");
 		this.name = name;
 		return this;
 	}
+
+    /**
+     * @param tag The image's tag. Can be null or empty.
+     */
+    @Override
+    public PushImageCmd withTag(String tag) {
+        checkNotNull(tag, "tag was not specified");
+        this.tag = tag;
+        return this;
+    }
 
     @Override
     public String toString() {
@@ -46,8 +60,8 @@ public class PushImageCmdImpl extends AbstrAuthCfgDockerCmd<PushImageCmd, InputS
     /**
      * @throws NotFoundException No such image
      */
-	@Override
-    public InputStream exec() throws NotFoundException {
+    @Override
+    public Response exec() throws NotFoundException {
     	return super.exec();
     }
 }
